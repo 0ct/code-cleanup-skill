@@ -1,0 +1,53 @@
+name: smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate SKILL.md frontmatter
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("skills/code-cleanup/SKILL.md")
+          text = p.read_text(encoding="utf-8")
+          if not text.startswith("---\n"):
+              sys.exit("SKILL.md: missing frontmatter")
+          fm = text.split("---", 2)[1]
+          for key in ("name:", "description:"):
+              if key not in fm:
+                  sys.exit(f"SKILL.md: missing {key}")
+          if "name: code-cleanup" not in fm:
+              sys.exit("SKILL.md: name must match the directory")
+          print("frontmatter ok")
+          PY
+
+      - name: Scanner runs on a fixture
+        run: |
+          set -e
+          FIX=$(mktemp -d)
+          mkdir -p "$FIX/src"
+          printf 'export function used(){return 1}\n' > "$FIX/src/index.ts"
+          printf 'import { gone } from "./missing"\nconsole.log(used)\nTODO: wire this up\n' > "$FIX/src/app.ts"
+          printf '{"name":"f","dependencies":{"left-pad":"^1.0.0"}}\n' > "$FIX/package.json"
+          python3 skills/code-cleanup/scripts/repo_scan.py "$FIX" --md "$FIX/report.md" --json "$FIX/report.json" --quiet
+          python3 - "$FIX/report.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1], encoding="utf-8"))
+          cats = {f["category"] for f in d["findings"]}
+          print("categories:", sorted(cats))
+          assert "broken_import" in cats, "expected a broken relative import"
+          assert "markers" in cats, "expected a TODO marker"
+          print(f"{len(d['findings'])} findings, {d['stats']['files']} files")
+          PY

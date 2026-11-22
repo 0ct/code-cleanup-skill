@@ -1,7 +1,8 @@
 # code-cleanup
 
-[![skills.sh](https://skills.sh/b/0ct/code-cleanup-skill)](https://skills.sh/0ct/code-cleanup-skill)
+[![skills.sh](https://skills.sh/b/0ct/code-cleanup-skill)](https://github.com/0ct/code-cleanup-skill)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Agent Skills](https://img.shields.io/badge/format-agent--skills-blue)](https://agentskills.io)
 
 一个给 AI 编码 agent 用的代码卫生清理 skill。目标是**让仓库重新成为唯一可信的上下文源** —— 清掉上一轮改动、上下文压缩、agent 模型更新之后留在项目里的残留与自相矛盾，并把"我改了什么"变成可核查的增量。
 
@@ -10,7 +11,7 @@ An agent skill for post-edit repo hygiene: remove dead code, duplicated implemen
 ## 安装
 
 ```bash
-# 装到当前项目（.claude/skills/ 等约定目录）
+# 装到当前项目（写入 .agents/skills/，并 symlink 到已检测到的宿主）
 npx skills add 0ct/code-cleanup-skill --skill code-cleanup
 
 # 装到用户级，所有项目可用
@@ -20,21 +21,33 @@ npx skills add 0ct/code-cleanup-skill --skill code-cleanup -g
 npx skills add 0ct/code-cleanup-skill --list
 ```
 
-也可以直接从仓库路径装：
+也可以直接用仓库路径或完整 URL：
 
 ```bash
 npx skills add https://github.com/0ct/code-cleanup-skill/tree/main/skills/code-cleanup
 ```
 
-手动安装（不使用 skills CLI）：
+`npx skills add` 会把技能落到 `~/.agents/skills/`（项目级是 `./.agents/skills/`），再为检测到的宿主建软链：Claude Code、Cursor、Codex、Cline、Amp、Kimi Code CLI 等 20+ 个。装完重启会话即可，触发词：`清理代码`、`代码卫生`、`死代码`、`项目体检`、`deslop`、`code cleanup`。
+
+### WorkBuddy / CodeBuddy 需要多一步
+
+这两个宿主的目录不在 CLI 的检测范围内（CLI 只认 `~/.codebuddy/skills`，而 WorkBuddy 用的是 `~/.workbuddy/skills`），装完要自己建软链：
+
+```bash
+npx skills add 0ct/code-cleanup-skill --skill code-cleanup -g
+ln -s ~/.agents/skills/code-cleanup ~/.workbuddy/skills/code-cleanup   # WorkBuddy
+```
+
+### 不用 CLI 的装法
 
 ```bash
 git clone https://github.com/0ct/code-cleanup-skill /tmp/cc
 cp -R /tmp/cc/skills/code-cleanup ~/.workbuddy/skills/     # WorkBuddy
-# cp -R /tmp/cc/skills/code-cleanup ~/.claude/skills/      # Claude Code
+cp -R /tmp/cc/skills/code-cleanup ~/.claude/skills/        # Claude Code
 ```
 
-装完重启会话，技能列表里会出现 `code-cleanup`。触发词：`清理代码`、`代码卫生`、`死代码`、`项目体检`、`deslop`、`code cleanup`。
+或者从 [Releases](https://github.com/0ct/code-cleanup-skill/releases) 下载 `code-cleanup-1.0.0.zip`，解压后把 `code-cleanup/` 放进宿主的 skills 目录。
+
 
 ## 它解决的问题
 
@@ -134,6 +147,16 @@ skills/code-cleanup/
 │   └── report-template.md          # 四段式输出模板 + 硬约束 + 反例
 └── scripts/repo_scan.py            # 只读事实扫描器（纯 stdlib，1315 行）
 ```
+
+## 开发与同步
+
+仓库是发布源，宿主目录里装的是副本。改完技能后同步过去：
+
+```bash
+rsync -a --delete ~/Projects/code-cleanup-skill/skills/code-cleanup/ ~/.workbuddy/skills/code-cleanup/
+```
+
+CI 只做冒烟测试：`SKILL.md` frontmatter 合法、`repo_scan.py` 语法通过、在夹具仓库上能产出报告。
 
 ## License
 
